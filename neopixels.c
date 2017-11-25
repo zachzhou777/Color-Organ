@@ -1,86 +1,141 @@
 //*****************************************************************************
-// NeoPixel Library for Tiva LaunchPad
-// Usage: Connect data line on a NeoPixel strip to GPIO port B pin 2.
+// NeoPixel (WS2812B) Library for Tiva LaunchPad
+// Usage: Configure the desired GPIO pin for driving a NeoPixels. If needed, 
+//   convert desired frequencies of light on the visible spectrum to 24-bit 
+//   RGB codes. Connect the NeoPixels' data line to the specified pin to flash 
+//   them.
 // Author: Zachary Zhou
 //*****************************************************************************
 
 #include "neopixels.h"
+#include "print.h"
 
-// Array stores the color of each LED as a 24-bit RGB code
-static uint32_t data[NUM_NEOPIXELS];
+// Set by neopixels_config(); used as arguments for flash_neopixels()
+static uint32_t gpio_base;
+static uint8_t pin_mask;
 
-//*****************************************************************************
-// Disables interrupts.
-//*****************************************************************************
-__inline static void disable_interrupts(void) {
-	__asm{CPSID i}
-}
-
-//*****************************************************************************
-// Enables interrupts.
-//*****************************************************************************
-__inline static void enable_interrupts(void) {
-	__asm{CPSIE i}
-}
+// Array stores the color of each LED as a 24-bit RGB code; the upper byte is 
+// ignored, and the remaining 24 bits are the RGB code
+uint32_t neopixel_data[NUM_NEOPIXELS];
 
 //*****************************************************************************
 // Configures the GPIO pin connected to the NeoPixels appropriately.
 //*****************************************************************************
-void neopixels_config(void) {
-	// Enable the GPIOB peripheral, then wait for it to be ready
-	SysCtlPeripheralEnable(NEOPIXELS_PERIPH);
-	while (!SysCtlPeripheralReady(NEOPIXELS_PERIPH));
-	
-	// Configure pin as digital output
-	GPIOPinTypeGPIOOutput(NEOPIXELS_GPIO_BASE, NEOPIXELS_GPIO_PIN_M);
+void neopixels_config(uint32_t new_gpio_base, uint8_t pin_number) {
+    // Set global variables
+    gpio_base = new_gpio_base;
+    pin_mask = 1 << pin_number;
+    
+    // Values used as arguments for function calls
+    uint32_t sysctl_periph_value;
+    uint32_t pin_value;
+    
+    // Set 'sysctl_periph_value' based on 'gpio_base' argument; returns if value 
+    // of 'gpio_base' is invalid
+    switch (gpio_base) {
+        case GPIOA_BASE:
+            sysctl_periph_value = SYSCTL_PERIPH_GPIOA;
+            break;
+        case GPIOB_BASE:
+            sysctl_periph_value = SYSCTL_PERIPH_GPIOB;
+            break;
+        case GPIOC_BASE:
+            sysctl_periph_value = SYSCTL_PERIPH_GPIOC;
+            break;
+        case GPIOD_BASE:
+            sysctl_periph_value = SYSCTL_PERIPH_GPIOD;
+            break;
+        case GPIOE_BASE:
+            sysctl_periph_value = SYSCTL_PERIPH_GPIOE;
+            break;
+        case GPIOF_BASE:
+            sysctl_periph_value = SYSCTL_PERIPH_GPIOF;
+            break;
+        default:
+            return;
+    }
+    
+    // Set 'pin_value' based on 'pin_number' argument; returns if value of 
+    // 'pin_number' is invalid
+    // Note: I realize that 'pin_value' is the same as 'pin_mask' given macro 
+    // definitions, but in the event the macros are defined differently in the 
+    // future, I will assign 'pin_value' using the macros as follows
+    switch (pin_number) {
+        case 0:
+            pin_value = GPIO_PIN_0;
+            break;
+        case 1:
+            pin_value = GPIO_PIN_1;
+            break;
+        case 2:
+            pin_value = GPIO_PIN_2;
+            break;
+        case 3:
+            pin_value = GPIO_PIN_3;
+            break;
+        case 4:
+            pin_value = GPIO_PIN_4;
+            break;
+        case 5:
+            pin_value = GPIO_PIN_5;
+            break;
+        case 6:
+            pin_value = GPIO_PIN_6;
+            break;
+        case 7:
+            pin_value = GPIO_PIN_7;
+            break;
+        default:
+            return;
+    }
+    
+    // Enable the GPIOB peripheral, then wait for it to be ready
+    SysCtlPeripheralEnable(sysctl_periph_value);
+    while (!SysCtlPeripheralReady(sysctl_periph_value));
+    
+    // Configure pin as digital output
+    GPIOPinTypeGPIOOutput(gpio_base, pin_value);
 }
 
 //*****************************************************************************
-// Sets an LED in the strip to the desired color.
+// Converts a wavelength in nanometers to its corresponding 24-bit RGB code. 
+// Algorithm based on Dan Bruton's.
 //*****************************************************************************
-void neopixels_set_LED_color(uint16_t index, Color *color) {
-    // Set the appropriate integer element; note that the upper 8 bits are 
-    // unmodified
-    data[index] = (color->green << 16) + (color->red << 8) + color->blue;
-}
-
-//*****************************************************************************
-// Converts a wavelength in nanometers to its corresponding GRB code, i.e., 
-// the 24-bit RGB code where the red and green bits are swapped.
-//*****************************************************************************
-static uint32_t wavelength_to_grb(double wavelength) {
+static uint32_t wavelength_to_rgb_helper(double wavelength) {
+    const double GAMMA = 0.8;
     double red, green, blue, factor;
+    
     if (wavelength < 380.0) {
         red = 0.0;
         green = 0.0;
         blue = 0.0;
     }
     else if (wavelength < 440.0) {
-        red = (440.0 - wavelength) / (440.0 - 380.0);
+        red = (440.0 - wavelength)/(440.0 - 380.0);
         green = 0.0;
         blue = 1.0;
     }
     else if (wavelength < 490.0) {
         red = 0.0;
-        green = (wavelength - 440.0) / (490.0 - 440.0);
+        green = (wavelength - 440.0)/(490.0 - 440.0);
         blue = 1.0;
     }
     else if (wavelength < 510.0) {
         red = 0.0;
         green = 1.0;
-        blue = (510.0 - wavelength) / (510.0 - 490.0);
+        blue = (510.0 - wavelength)/(510.0 - 490.0);
     }
     else if (wavelength < 580.0) {
-        red = (wavelength - 510.0) / (580.0 - 510.0);
+        red = (wavelength - 510.0)/(580.0 - 510.0);
         green = 1.0;
         blue = 0.0;
     }
     else if (wavelength < 645.0) {
         red = 1.0;
-        green = (645.0 - wavelength) / (645.0 - 580.0);
+        green = (645.0 - wavelength)/(645.0 - 580.0);
         blue = 0.0;
     }
-    else if (wavelength < 780.0) {
+    else if (wavelength <= 780.0) {
         red = 1.0;
         green = 0.0;
         blue = 0.0;
@@ -90,243 +145,49 @@ static uint32_t wavelength_to_grb(double wavelength) {
         green = 0.0;
         blue = 0.0;
     }
+        
+    if (wavelength < 380.0)
+        factor = 0.0;
+    else if (wavelength < 420.0)
+        factor = 0.3 + 0.7*(wavelength - 380.0)/(420.0 - 380.0);
+    else if (wavelength < 700.0)
+        factor = 1.0;
+    else if (wavelength <= 780.0)
+        factor = 0.3 + 0.7*(780.0 - wavelength)/(780.0 - 700.0);
+    else
+        factor = 0.0;
+    
+    return ((((uint8_t) (pow(factor * red, GAMMA)*0xFF)) << 16) |
+            (((uint8_t) (pow(factor * green, GAMMA)*0xFF)) << 8) |
+            ((uint8_t) (pow(factor * blue, GAMMA)*0xFF)));
+}
 
-//    if (wavelength > 700.0) factor = 0.3 + (0.7 * (780.0 - wavelength) / (780.0 - 700.0));
-//    else if (wavelength < 420.0) factor = 0.3 + (0.7 * (wavelength - 380.0) / (420.0 - 380.0));
-//    else factor = 0.0;
-
-    if (wavelength < 380.0) factor = 0.0;
-    else if (wavelength < 420.0) factor = 0.3 + (0.7 * (wavelength - 380.0) / (420.0 - 380.0));
-    else if (wavelength < 700.0) factor = 1.0;
-    else if (wavelength < 780.0) factor = 0.3 + (0.7 * (780.0 - wavelength) / (780.0 - 700.0));
-    else factor = 0.0;
-
-
-    //return ((((uint8_t) (green * 0xFF)) << 16) | (((uint8_t) (red * 0xFF)) << 8) | ((uint8_t) (blue * 0xFF)));
-    return ((((uint8_t) (pow(factor * green, 0.8) * 0xFF)) << 16) |
-            (((uint8_t) (pow(factor * red, 0.8) * 0xFF)) << 8) |
-            ((uint8_t) (pow(factor * blue, 0.8) * 0xFF)));
+uint32_t wavelength_to_rgb(double wavelength, bool lookup) {
+    static uint32_t lut[401];
+    uint16_t idx;
+    
+    if (!lookup) return wavelength_to_rgb_helper(wavelength);
+    
+    if ((wavelength < 380.0) || (wavelength > 780.0)) return 0x00000000;
+    
+    wavelength = round(wavelength);
+    idx = wavelength - 380;
+    if (lut[idx]) return lut[idx];
+    lut[idx] = wavelength_to_rgb_helper(wavelength);
+    return lut[idx];
 }
 
 //*****************************************************************************
-// Sets an LED in the strip to the desired color.
+// EABI compliant wrapper function that calls send_neopixels_data().
 //*****************************************************************************
-void neopixels_set_LED_wavelength(uint16_t index, double wavelength) {
-    data[index] = wavelength_to_grb(wavelength);
+void flash_neopixels(void) {
+    // Save 'gpio_base' as it is overwritten in send_neopixels_data()
+    uint32_t temp = gpio_base;
+    send_neopixels_data(
+        gpio_base + 255*sizeof(uint32_t),  // GPIO data register address
+        pin_mask,                          // GPIO pin mask
+        (uint32_t) neopixel_data,          // NeoPixel data array address
+        NUM_NEOPIXELS                      // Number of NeoPixels
+    );
+    gpio_base = temp;
 }
-
-//*****************************************************************************
-// Halts execution for one microsecond.
-//*****************************************************************************
-static void wait_microsecond(void) {
-	// Clock rate is 50 MHz, so waiting 50 clock cycles will be equivalent to 
-	// waiting one microsecond
-	__asm {
-		NOP
-		NOP
-		NOP
-		NOP
-		NOP
-		NOP
-		NOP
-		NOP
-		NOP
-		NOP	// 10 cycles
-		
-		NOP
-		NOP
-		NOP
-		NOP
-		NOP
-		NOP
-		NOP
-		NOP
-		NOP
-		NOP	// 20 cycles
-		
-		NOP
-		NOP
-		NOP
-		NOP
-		NOP
-		NOP
-		NOP
-		NOP
-		NOP
-		NOP	// 30 cycles
-		
-		NOP
-		NOP
-		NOP
-		NOP
-		NOP
-		NOP
-		NOP
-		NOP
-		NOP
-		NOP	// 40 cycles
-		
-		NOP
-		NOP
-		NOP
-		NOP
-		NOP
-		NOP
-		NOP
-		NOP
-		NOP
-		NOP	// 50 cycles
-	}
-}
-
-//*****************************************************************************
-// Sends data to the LED strip following the protocol specified by the 
-// datasheet. I verified timing correctness using an oscilloscope.
-//*****************************************************************************
-void neopixels_send_data(void) {
-	// Get the address of the GPIO data register
-	uint32_t gpio_addr = (uint32_t) (void *) &(NEOPIXELS_GPIO_REG->DATA);
-	
-	// Loop counters; one is unsigned and the other is signed intentionally
-	uint8_t i;
-	int8_t j;
-	
-	// Must disable interrupts before transmission due to timing constraints
-	disable_interrupts();
-	
-	// 'high' and 'low' hold values to be stored in the GPIO data register when 
-	// driving the pin high or low; 'bit' will be assigned one of these values
-	const uint32_t high = NEOPIXELS_GPIO_REG->DATA | NEOPIXELS_GPIO_PIN_M;
-	const uint32_t low = NEOPIXELS_GPIO_REG->DATA & ~NEOPIXELS_GPIO_PIN_M;
-	uint32_t bit;
-	
-	// Transfer data through the GPIO pin; since it's tricky to predict how long 
-	// the code will take to execute (especially since some of it's C), I used 
-	// an oscilloscope to tweak the number of NOPs needed
-	for (i = 0; i < NUM_NEOPIXELS; i++) {
-		for (j = 23; j >= 0; j--) {
-			bit = (data[i] & (1 << j)) ? high : low;
-			__asm {
-				// Drive pin high
-				STR high, [gpio_addr]
-				NOP
-				NOP
-				NOP
-				NOP
-				NOP
-				NOP
-				NOP
-				NOP
-				NOP
-				NOP
-				NOP
-				NOP
-				NOP
-				NOP
-				NOP
-				NOP
-				NOP
-				NOP
-				NOP
-				// Pull pin low
-				STR bit, [gpio_addr]
-				NOP
-				NOP
-				NOP
-				NOP
-				NOP
-				NOP
-				NOP
-				NOP
-				NOP
-				NOP
-				NOP
-				NOP
-				NOP
-				NOP
-				NOP
-				NOP
-				NOP
-				NOP
-				NOP
-				// If the pin wasn't pulled low before, it will be now
-				STR low, [gpio_addr]
-				NOP
-				NOP
-			}
-		}
-	}
-	
-	// Done transmitting data, so reenable interrupts
-	enable_interrupts();
-	
-	// Wait >50 µs
-	for (i = 0; i < 50; i++) wait_microsecond();
-}
-/*
-void neopixels_send_data(void) {
-	uint32_t i;
-	
-	uint32_t data_addr = (uint32_t) data;
-	
-	// Get the address of the GPIO data register
-	uint32_t gpio_addr = (uint32_t) (void *) &(NEOPIXELS_GPIO_REG->DATA);
-	
-	uint32_t led_data;
-	
-	uint32_t mask;
-	
-	// Loop counters
-	uint32_t num_leds_remaining = NUM_NEOPIXELS;
-	uint32_t num_bits_remaining = 8;
-	uint32_t num_colors_remaining = 3;
-	
-	// Must disable interrupts before transmission due to timing constraints
-	disable_interrupts();
-	
-	// 'high' and 'low' hold values to be stored in the GPIO data register when 
-	// driving the pin high or low; 'bit' will be assigned one of these values
-	const uint32_t high = NEOPIXELS_GPIO_REG->DATA | NEOPIXELS_GPIO_PIN_M;
-	const uint32_t low = NEOPIXELS_GPIO_REG->DATA & ~NEOPIXELS_GPIO_PIN_M;
-	uint32_t bit;
-	
-	__asm {
-	led_loop_start:
-		LDR led_data, [data_addr], 4
-	color_loop_start:
-		MOV mask, 0x0080
-		CMP num_leds_remaining, 2
-		MOVEQ mask, 0x8000
-		CMP num_leds_remaining, 1
-		MOVEQ mask, 0x0800
-	bits_loop_start:
-		STR high, [gpio_addr]
-		TST led_data, mask
-		MOV bit, high
-		MOVEQ bit, low
-		LSL led_data, led_data, 1
-		
-		STR bit, [gpio_addr]
-		NOP
-		NOP
-		STR low, [gpio_addr]
-		NOP
-		NOP
-		SUBS num_leds_remaining, num_leds_remaining, 1
-		BNE led_loop_start
-		SUBS num_colors_remaining, num_colors_remaining, 1
-		BNE color_loop_start
-		NOP
-		NOP
-		NOP
-		NOP
-		SUBS num_bits_remaining, num_bits_remaining, 1
-		BNE bits_loop_start
-	}
-	
-	// Done transmitting data, so reenable interrupts
-	enable_interrupts();
-	
-	// Wait >50 µs
-	for (i = 0; i < 50; i++) wait_microsecond();
-}*/

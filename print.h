@@ -1,9 +1,9 @@
 //*****************************************************************************
-// Audio Library for Tiva LaunchPad
-// Usage: Connect normalized left channel output to GPIO port E pin 3 and 
-// normalized right channel output to GPIO port E pin 2.
+// UART-based Printing Utility
+// Usage: Enables usage of printf() through MicroLib.
 // Author: Zachary Zhou
 //*****************************************************************************
+
 #ifndef __PRINT_H__
 #define __PRINT_H__
 
@@ -21,12 +21,12 @@
 #define EIGHT_N_ONE (UART_CONFIG_WLEN_8 | UART_CONFIG_PAR_NONE | UART_CONFIG_STOP_ONE)
 
 //*****************************************************************************
-// 
+// Configures the UART and GPIO pin.
 //*****************************************************************************
 void print_config(void);
 
 //*****************************************************************************
-// 
+// Polling-based implementation of fputc().
 //*****************************************************************************
 int fputc(int c, FILE* stream);
 

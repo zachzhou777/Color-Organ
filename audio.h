@@ -5,11 +5,19 @@
 // Author: Zachary Zhou
 //*****************************************************************************
 
+#ifndef __AUDIO_H__
+#define __AUDIO_H__
+
+#define PART_TM4C123GH6PM
+
 #include <stdbool.h>
 #include <stdint.h>
 #include "driverlib/adc.h"
 #include "driverlib/gpio.h"
 #include "driverlib/sysctl.h"
+#include "driverlib/timer.h"
+#include "inc/hw_ints.h"
+#include "inc/hw_memmap.h"
 #include "TM4C123.h"
 
 //*****************************************************************************
@@ -17,12 +25,4 @@
 //*****************************************************************************
 void audio_config(void);
 
-//*****************************************************************************
-// Triggers a sample sequence and reads values from ADC into 'buffer' for 
-// later retrieval.
-//*****************************************************************************
-void audio_get_data(void);
-
-__inline uint32_t audio_left_channel(void);
-
-__inline uint32_t audio_right_channel(void);
+#endif

@@ -1,6 +1,9 @@
 //*****************************************************************************
-// NeoPixel Library for Tiva LaunchPad
-// Usage: Connect data line on a NeoPixel strip to GPIO port B pin 2.
+// NeoPixel (WS2812B) Library for Tiva LaunchPad
+// Usage: Configure the desired GPIO pin for driving a NeoPixels. If needed, 
+//   convert desired frequencies of light on the visible spectrum to 24-bit 
+//   RGB codes. Connect the NeoPixels' data line to the specified pin to flash 
+//   them.
 // Author: Zachary Zhou
 //*****************************************************************************
 
@@ -15,36 +18,25 @@
 #include "driverlib/sysctl.h"
 #include "TM4C123.h"
 
-#define NEOPIXELS_PERIPH      SYSCTL_PERIPH_GPIOB  // For enabling clocking
-#define NEOPIXELS_GPIO_BASE   GPIOB_BASE           // GPIO port base address
-#define NEOPIXELS_GPIO_PIN_M  GPIO_PIN_2           // Pin mask
-#define NEOPIXELS_GPIO_REG    GPIOB                // Register map
-#define NUM_NEOPIXELS         150                  // Number of NeoPixels
+#define NUM_NEOPIXELS 150  // Number of NeoPixels
 
-// Primarily used to organize colors into a single argument for the 
-// neopixels_set_LED_color() method
-typedef struct {
-	uint8_t red;
-	uint8_t green;
-	uint8_t blue;
-} Color;
+extern uint32_t neopixel_data[NUM_NEOPIXELS];
 
 //*****************************************************************************
 // Configures the GPIO pin appropriately.
 //*****************************************************************************
-void neopixels_config(void);
+void neopixels_config(uint32_t new_gpio_base, uint8_t pin_number);
 
 //*****************************************************************************
-// Sets an LED in the strip to the desired color.
+// Converts a wavelength in nanometers to its corresponding 24-bit RGB code. 
+// Algorithm based on Dan Bruton's.
 //*****************************************************************************
-void neopixels_set_LED_color(uint16_t index, Color *color);
-
-void neopixels_set_LED_wavelength(uint16_t index, double wavelength);
+uint32_t wavelength_to_rgb(double wavelength, bool lookup);
 
 //*****************************************************************************
 // Sends data to the LED strip following the protocol specified by the 
 // datasheet. I verified timing correctness using an oscilloscope.
 //*****************************************************************************
-void neopixels_send_data(void);
+void flash_neopixels(void);
 
 #endif
