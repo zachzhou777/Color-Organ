@@ -16,4 +16,6 @@
 #include "neopixels.h"
 #include "print.h"
 
+#define NUM_BANDS 3  // Number of bands that are expressed
+
 #endif

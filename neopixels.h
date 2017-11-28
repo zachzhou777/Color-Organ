@@ -38,5 +38,6 @@ uint32_t wavelength_to_rgb(double wavelength, bool lookup);
 // datasheet. I verified timing correctness using an oscilloscope.
 //*****************************************************************************
 void flash_neopixels(void);
+void clear_neopixels(void);
 
 #endif

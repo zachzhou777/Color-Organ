@@ -17,6 +17,7 @@ static uint8_t pin_mask;
 // Array stores the color of each LED as a 24-bit RGB code; the upper byte is 
 // ignored, and the remaining 24 bits are the RGB code
 uint32_t neopixel_data[NUM_NEOPIXELS];
+static uint32_t dud[NUM_NEOPIXELS];
 
 //*****************************************************************************
 // Configures the GPIO pin connected to the NeoPixels appropriately.
@@ -157,9 +158,9 @@ static uint32_t wavelength_to_rgb_helper(double wavelength) {
     else
         factor = 0.0;
     
-    return ((((uint8_t) (pow(factor * red, GAMMA)*0xFF)) << 16) |
+    return (((uint8_t) (pow(factor * red, GAMMA)*0xFF)) << 16) |
             (((uint8_t) (pow(factor * green, GAMMA)*0xFF)) << 8) |
-            ((uint8_t) (pow(factor * blue, GAMMA)*0xFF)));
+            ((uint8_t) (pow(factor * blue, GAMMA)*0xFF));
 }
 
 uint32_t wavelength_to_rgb(double wavelength, bool lookup) {
@@ -186,7 +187,18 @@ void flash_neopixels(void) {
     send_neopixels_data(
         gpio_base + 255*sizeof(uint32_t),  // GPIO data register address
         pin_mask,                          // GPIO pin mask
-        (uint32_t) neopixel_data,          // NeoPixel data array address
+        (uint32_t) neopixel_data,          // Data array address
+        NUM_NEOPIXELS                      // Number of NeoPixels
+    );
+    gpio_base = temp;
+}
+
+void clear_neopixels(void) {
+    uint32_t temp = gpio_base;
+    send_neopixels_data(
+        gpio_base + 255*sizeof(uint32_t),  // GPIO data register address
+        pin_mask,                          // GPIO pin mask
+        (uint32_t) dud,                    // Dud array address
         NUM_NEOPIXELS                      // Number of NeoPixels
     );
     gpio_base = temp;
